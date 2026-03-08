@@ -44,15 +44,17 @@ const HEARTBEAT_INTERVAL_MS = 30_000
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
-async function post(path: string, body: object): Promise<void> {
+async function post(path: string, body: object): Promise<Record<string, unknown>> {
   try {
-    await fetch(`${PARACHUTE_URL}${path}`, {
+    const res = await fetch(`${PARACHUTE_URL}${path}`, {
       method: "POST",
       headers: HEADERS,
       body: JSON.stringify(body),
     })
+    return (await res.json()) as Record<string, unknown>
   } catch (err) {
     console.error(`  ❌  POST ${path} failed:`, err)
+    return {}
   }
 }
 
@@ -130,12 +132,47 @@ client.on("disconnected", async (reason) => {
 
 function startHeartbeat(phone: string, name: string): void {
   setInterval(async () => {
-    await post("/api/integrations/whatsapp/status", {
+    const res = await post("/api/integrations/whatsapp/status", {
       status: "connected",
       phone,
       name,
     })
+    if (res.discoverContacts) {
+      console.log("🔍  Contact discovery requested from Settings…")
+      await syncContacts()
+    }
   }, HEARTBEAT_INTERVAL_MS)
+}
+
+// ─── Contact discovery ─────────────────────────────────────────────────────
+
+async function syncContacts(): Promise<void> {
+  const chats = await client.getChats()
+  const personal = chats.filter((c) => isPersonalChat(c.id._serialized))
+
+  const contacts: Array<{ phone: string; name?: string }> = []
+
+  for (const chat of personal) {
+    const phone = jidToPhone(chat.id._serialized)
+    if (!phone) continue
+
+    let name: string | undefined
+    try {
+      const contact = await chat.getContact()
+      name = contact.pushname || contact.name || chat.name || undefined
+    } catch {
+      name = chat.name || undefined
+    }
+
+    contacts.push({ phone, ...(name ? { name } : {}) })
+  }
+
+  if (contacts.length > 0) {
+    await post("/api/integrations/whatsapp/contacts", { contacts })
+    console.log(`  📋  Pushed ${contacts.length} contacts for discovery`)
+  } else {
+    console.log("  📋  No personal chat contacts found")
+  }
 }
 
 // ─── Real-time message capture ─────────────────────────────────────────────────

@@ -18,7 +18,10 @@ import {
   WifiOff,
   RefreshCw,
   Smartphone,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,10 +45,30 @@ const QR_SERVICE_URL = "https://api.qrserver.com/v1/create-qr-code"
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+interface DiscoverState {
+  status: "idle" | "loading" | "done" | "error"
+  message?: string
+}
+
 export function WhatsAppStatus() {
   const [statusData, setStatusData] = useState<StatusResponse | null>(null)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [discover, setDiscover] = useState<DiscoverState>({ status: "idle" })
+
+  const handleDiscover = useCallback(async () => {
+    setDiscover({ status: "loading" })
+    try {
+      const res = await fetch("/api/integrations/whatsapp/discover", { method: "POST" })
+      if (!res.ok) throw new Error("Request failed")
+      setDiscover({
+        status: "done",
+        message: "Discovery requested — daemon will push contacts within 30 seconds. Check Discovered Contacts.",
+      })
+    } catch {
+      setDiscover({ status: "error", message: "Failed to request discovery — is the daemon running?" })
+    }
+  }, [])
 
   // Fetch current status from Parachute API
   const fetchStatus = useCallback(async () => {
@@ -141,6 +164,55 @@ export function WhatsAppStatus() {
             </p>
           </div>
         )}
+
+        <div className="px-5 py-5 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-zinc-800">Discover contacts</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Scans your WhatsApp chats for people you&apos;ve messaged who aren&apos;t yet in
+              Parachute. Review and add them from the{" "}
+              <a href="/people/discover" className="underline">Discovered Contacts</a> page.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDiscover}
+            disabled={discover.status === "loading"}
+            className="gap-2"
+          >
+            {discover.status === "loading" ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Requesting…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Discover contacts
+              </>
+            )}
+          </Button>
+
+          {discover.status === "done" && (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-green-500" />
+              <span>
+                {discover.message}{" "}
+                <a href="/people/discover" className="underline font-medium">
+                  Review →
+                </a>
+              </span>
+            </div>
+          )}
+
+          {discover.status === "error" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+              {discover.message}
+            </div>
+          )}
+        </div>
       </div>
     )
   }

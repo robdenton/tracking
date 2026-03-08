@@ -109,5 +109,20 @@ export async function POST(req: NextRequest) {
   }
 
   await prisma.$transaction(upserts)
-  return NextResponse.json({ ok: true })
+
+  // Check if a contact-discovery scan was requested from the Settings UI
+  const discoverPending = await prisma.setting.findUnique({
+    where: { key: "whatsapp_discover_pending" },
+  })
+  const discoverContacts = discoverPending?.value === "1"
+
+  if (discoverContacts) {
+    // Clear the flag — daemon will do exactly one scan
+    await prisma.setting.update({
+      where: { key: "whatsapp_discover_pending" },
+      data: { value: "0" },
+    })
+  }
+
+  return NextResponse.json({ ok: true, discoverContacts })
 }
