@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { screenContacts } from "@/lib/contact-screening"
 import { z } from "zod"
 
 function normalizePhone(raw: string): string {
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
 
   let created = 0
   let updated = 0
+  const newIds: string[] = []
 
   for (const { phone, name } of contacts) {
     // Skip if this phone matches a known person
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
     })
 
     if (!existing) {
-      await prisma.discoveredContact.create({
+      const record = await prisma.discoveredContact.create({
         data: {
           source: "whatsapp",
           phone,
@@ -79,6 +81,7 @@ export async function POST(req: NextRequest) {
           lastSeenAt: new Date(),
         },
       })
+      newIds.push(record.id)
       created++
     } else if (!existing.dismissed) {
       await prisma.discoveredContact.update({
@@ -89,5 +92,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, created, updated, total: contacts.length })
+  // LLM screen newly created contacts
+  if (newIds.length > 0) {
+    const toScreen = await prisma.discoveredContact.findMany({
+      where: { id: { in: newIds } },
+      select: { id: true, name: true, email: true, phone: true, source: true, messageCount: true },
+    })
+    const screenResults = await screenContacts(toScreen)
+    await Promise.all(
+      screenResults.map((r) =>
+        prisma.discoveredContact.update({
+          where: { id: r.id },
+          data: { screeningStatus: r.status, screeningReason: r.reason, screenedAt: new Date() },
+        })
+      )
+    )
+  }
+
+  return NextResponse.json({ ok: true, created, updated, total: contacts.length, screened: newIds.length })
 }

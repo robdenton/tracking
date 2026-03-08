@@ -155,15 +155,19 @@ model Note {
 
 // Staging buffer for contacts discovered from Gmail/WhatsApp not yet in Parachute
 model DiscoveredContact {
-  id           String   @id @default(cuid())
-  source       String   // "gmail" | "whatsapp"
-  name         String?
-  email        String?  // gmail discoveries
-  phone        String?  // whatsapp discoveries
-  messageCount Int      @default(1)
-  lastSeenAt   DateTime
-  dismissed    Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id               String    @id @default(cuid())
+  source           String    // "gmail" | "whatsapp"
+  name             String?
+  email            String?   // gmail discoveries
+  phone            String?   // whatsapp discoveries
+  messageCount     Int       @default(1)
+  lastSeenAt       DateTime
+  dismissed        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  // LLM screening fields
+  screeningStatus  String    @default("pending") // "pending"|"keep"|"skip"|"uncertain"
+  screeningReason  String?   // ≤15-word LLM explanation shown on card
+  screenedAt       DateTime?
 
   @@map("discovered_contacts")
 }

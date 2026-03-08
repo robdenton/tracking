@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { getGmailProfile, searchMessages, getMessageHeaders } from "@/integrations/gmail"
+import { screenContacts } from "@/lib/contact-screening"
 import { NextResponse } from "next/server"
 
 // ─── Email header parser ──────────────────────────────────────────────────────
@@ -116,15 +117,17 @@ export async function POST() {
       }
     }
 
-    // Upsert into DiscoveredContact
+    // Upsert into DiscoveredContact — collect newly created IDs for screening
     let newCount = 0
+    const newIds: string[] = []
+
     for (const [email, data] of discovered) {
       const existing = await prisma.discoveredContact.findFirst({
         where: { source: "gmail", email },
       })
 
       if (!existing) {
-        await prisma.discoveredContact.create({
+        const created = await prisma.discoveredContact.create({
           data: {
             source: "gmail",
             email,
@@ -133,6 +136,7 @@ export async function POST() {
             lastSeenAt: data.lastSeenAt,
           },
         })
+        newIds.push(created.id)
         newCount++
       } else if (!existing.dismissed) {
         await prisma.discoveredContact.update({
@@ -150,11 +154,29 @@ export async function POST() {
       // If dismissed — skip, user chose to ignore
     }
 
+    // LLM screen the newly created contacts
+    if (newIds.length > 0) {
+      const toScreen = await prisma.discoveredContact.findMany({
+        where: { id: { in: newIds } },
+        select: { id: true, name: true, email: true, phone: true, source: true, messageCount: true },
+      })
+      const screenResults = await screenContacts(toScreen)
+      await Promise.all(
+        screenResults.map((r) =>
+          prisma.discoveredContact.update({
+            where: { id: r.id },
+            data: { screeningStatus: r.status, screeningReason: r.reason, screenedAt: new Date() },
+          })
+        )
+      )
+    }
+
     return NextResponse.json({
       success: true,
       discovered: newCount,
       scanned: messages.length,
       total: discovered.size,
+      screened: newIds.length,
     })
   } catch (error) {
     console.error("Gmail discover error:", error)

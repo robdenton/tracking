@@ -29,6 +29,9 @@ export default async function DiscoverPage() {
       <DiscoverClient initialContacts={contacts.map(c => ({
         ...c,
         lastSeenAt: c.lastSeenAt.toISOString(),
+        screenedAt: c.screenedAt?.toISOString() ?? null,
+        // Cast Prisma string to the union type the client expects
+        screeningStatus: c.screeningStatus as "pending" | "keep" | "skip" | "uncertain",
       }))} />
     </div>
   )
