@@ -1,0 +1,15 @@
+# WhatsApp session data — contains auth credentials, never commit
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Environment
+.env
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# macOS
+.DS_Store
