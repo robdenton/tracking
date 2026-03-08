@@ -18,54 +18,68 @@ export async function POST() {
     const profile = await getGmailProfile(session.accessToken)
     const myEmail = profile.emailAddress
 
-    // Only sync active people who have email addresses
+    // Sync all active people — check Person.email + all email identities
     const people = await prisma.person.findMany({
-      where: { email: { not: null }, status: "active" },
-      select: { id: true, fullName: true, email: true, lastInteractionAt: true },
+      where: { status: "active" },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        lastInteractionAt: true,
+        identities: { where: { type: "email" }, select: { value: true } },
+      },
     })
 
     let totalCreated = 0
     const syncedPeople: Array<{ name: string; email: string; created: number }> = []
 
     for (const person of people) {
-      if (!person.email) continue
+      // Collect all email addresses for this person (primary + aliases)
+      const emails = [
+        person.email,
+        ...person.identities.map((i) => i.value),
+      ].filter(Boolean) as string[]
 
-      let messages
-      try {
-        messages = await syncContactEmails(person.email, session.accessToken, myEmail)
-      } catch (err) {
-        console.error(`Gmail sync failed for ${person.fullName}:`, err)
-        continue
-      }
+      if (emails.length === 0) continue
 
-      let created = 0
+      let personCreated = 0
       let latestDate = person.lastInteractionAt
 
-      for (const msg of messages) {
-        // Skip if we already have this email (keyed by Gmail message ID in metadata)
-        const exists = await prisma.interaction.findFirst({
-          where: {
-            personId: person.id,
-            metadata: { contains: msg.id },
-          },
-        })
-        if (exists) continue
+      for (const email of emails) {
+        let messages
+        try {
+          messages = await syncContactEmails(email, session.accessToken, myEmail)
+        } catch (err) {
+          console.error(`Gmail sync failed for ${person.fullName} <${email}>:`, err)
+          continue
+        }
 
-        await prisma.interaction.create({
-          data: {
-            personId: person.id,
-            type: "email",
-            occurredAt: msg.date,
-            summary: msg.subject,
-            direction: msg.direction,
-            channel: "email",
-            metadata: JSON.stringify({ gmailId: msg.id, threadId: msg.threadId }),
-          },
-        })
+        for (const msg of messages) {
+          // Skip if we already have this email (keyed by Gmail message ID in metadata)
+          const exists = await prisma.interaction.findFirst({
+            where: {
+              personId: person.id,
+              metadata: { contains: msg.id },
+            },
+          })
+          if (exists) continue
 
-        created++
-        if (!latestDate || msg.date > latestDate) {
-          latestDate = msg.date
+          await prisma.interaction.create({
+            data: {
+              personId: person.id,
+              type: "email",
+              occurredAt: msg.date,
+              summary: msg.subject,
+              direction: msg.direction,
+              channel: "email",
+              metadata: JSON.stringify({ gmailId: msg.id, threadId: msg.threadId }),
+            },
+          })
+
+          personCreated++
+          if (!latestDate || msg.date > latestDate) {
+            latestDate = msg.date
+          }
         }
       }
 
@@ -77,9 +91,9 @@ export async function POST() {
         })
       }
 
-      if (created > 0) {
-        syncedPeople.push({ name: person.fullName, email: person.email, created })
-        totalCreated += created
+      if (personCreated > 0) {
+        syncedPeople.push({ name: person.fullName, email: emails[0], created: personCreated })
+        totalCreated += personCreated
       }
     }
 

@@ -11,6 +11,7 @@ import { Star, MapPin, Mail, Phone, Linkedin, Twitter, Globe, Pencil, ExternalLi
 import { LogInteractionButton } from "@/components/people/log-interaction-button"
 import { LogValueEventButton } from "@/components/people/log-value-event-button"
 import { AddNoteButton } from "@/components/people/add-note-button"
+import { ContactIdentities } from "@/components/people/contact-identities"
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -57,8 +58,20 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
           <Card>
             <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
             <CardContent className="space-y-2.5 text-sm">
-              {person.email && <div className="flex items-center gap-2 text-zinc-600"><Mail className="h-3.5 w-3.5 shrink-0 text-zinc-400" /><span className="truncate">{person.email}</span></div>}
-              {person.phone && <div className="flex items-center gap-2 text-zinc-600"><Phone className="h-3.5 w-3.5 shrink-0 text-zinc-400" /><span>{person.phone}</span></div>}
+              <ContactIdentities
+                personId={person.id}
+                type="email"
+                primary={person.email ?? null}
+                initial={person.identities.filter(i => i.type === "email")}
+                icon={<Mail className="h-3.5 w-3.5 shrink-0 text-zinc-400" />}
+              />
+              <ContactIdentities
+                personId={person.id}
+                type="phone"
+                primary={person.phone ?? null}
+                initial={person.identities.filter(i => i.type === "phone")}
+                icon={<Phone className="h-3.5 w-3.5 shrink-0 text-zinc-400" />}
+              />
               {person.location && <div className="flex items-center gap-2 text-zinc-600"><MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-400" /><span>{person.location}</span></div>}
               {person.linkedinUrl && <a href={person.linkedinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline"><Linkedin className="h-3.5 w-3.5 shrink-0" />LinkedIn<ExternalLink className="h-3 w-3" /></a>}
               {person.twitterUrl && <a href={person.twitterUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sky-500 hover:underline"><Twitter className="h-3.5 w-3.5 shrink-0" />Twitter<ExternalLink className="h-3 w-3" /></a>}

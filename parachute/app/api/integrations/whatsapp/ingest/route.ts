@@ -76,13 +76,21 @@ export async function POST(req: NextRequest) {
 
   const contactPhone = jidToPhone(contactJid)
 
-  // ── Find matching Person ──────────────────────────────────────────────────
+  // ── Find matching Person (Person.phone + all phone identities) ───────────
   const people = await prisma.person.findMany({
-    where: { phone: { not: null }, status: "active" },
-    select: { id: true, phone: true, lastInteractionAt: true },
+    where: { status: "active" },
+    select: {
+      id: true,
+      phone: true,
+      lastInteractionAt: true,
+      identities: { where: { type: "phone" }, select: { value: true } },
+    },
   })
 
-  const person = people.find((p) => p.phone && phonesMatch(contactPhone, p.phone))
+  const person = people.find((p) => {
+    if (p.phone && phonesMatch(contactPhone, p.phone)) return true
+    return p.identities.some((id) => phonesMatch(contactPhone, id.value))
+  })
 
   if (!person) {
     // Unknown contact — not in Parachute, silently ignore

@@ -62,6 +62,7 @@ export async function getPersonById(id: string) {
       valueEvents: { orderBy: { occurredAt: "desc" } },
       suggestions: { where: { status: "open" }, orderBy: { priority: "asc" } },
       notesList: { orderBy: { createdAt: "desc" } },
+      identities: { orderBy: { id: "asc" } },
     },
   })
 }
