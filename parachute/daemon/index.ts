@@ -2,19 +2,21 @@
  * Parachute — WhatsApp daemon
  *
  * Uses whatsapp-web.js (Puppeteer-based) to:
- *   1. Authenticate via QR code (once — session persists)
+ *   1. Authenticate via QR code — displayed in your Parachute Settings page
  *   2. On startup: fetch last 90 days of 1:1 message history and POST to Parachute
  *   3. Ongoing: stream new messages to Parachute in real-time
+ *   4. Send heartbeats so the Settings page shows live connection status
  *
  * Run from this directory:
  *   cp .env.example .env   (fill in PARACHUTE_URL and DAEMON_SECRET)
  *   npm install
  *   npm start
+ *
+ * Then open Parachute → Settings → WhatsApp to scan the QR code.
  */
 
 import "dotenv/config"
 import { Client, LocalAuth } from "whatsapp-web.js"
-import qrcode from "qrcode-terminal"
 import { isPersonalChat, jidToPhone } from "./phone"
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -30,10 +32,29 @@ if (!PARACHUTE_URL || !DAEMON_SECRET) {
   process.exit(1)
 }
 
-const INGEST_URL = `${PARACHUTE_URL}/api/integrations/whatsapp/ingest`
+const HEADERS = {
+  "Content-Type": "application/json",
+  "x-daemon-secret": DAEMON_SECRET,
+}
+
 const HISTORY_DAYS = 90
-const HISTORY_LIMIT = 500 // max messages to fetch per chat on startup
-const CHAT_DELAY_MS = 250 // small delay between chats during sync
+const HISTORY_LIMIT = 500
+const CHAT_DELAY_MS = 250
+const HEARTBEAT_INTERVAL_MS = 30_000
+
+// ─── API helpers ──────────────────────────────────────────────────────────────
+
+async function post(path: string, body: object): Promise<void> {
+  try {
+    await fetch(`${PARACHUTE_URL}${path}`, {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    console.error(`  ❌  POST ${path} failed:`, err)
+  }
+}
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
@@ -51,14 +72,15 @@ const client = new Client({
 
 // ─── Auth events ──────────────────────────────────────────────────────────────
 
-client.on("qr", (qr) => {
-  console.log("\n📱  Scan this QR code in WhatsApp → Linked Devices → Link a Device:\n")
-  qrcode.generate(qr, { small: true })
-  console.log("\nWaiting for scan…\n")
+client.on("qr", async (qr) => {
+  console.log("📱  QR code ready — open Parachute → Settings → WhatsApp to scan it.")
+  // POST QR to Parachute so it can display it in the browser
+  await post("/api/integrations/whatsapp/qr", { qr })
+  await post("/api/integrations/whatsapp/status", { status: "qr_pending" })
 })
 
 client.on("authenticated", () => {
-  console.log("🔐  Authenticated — session saved for future runs.")
+  console.log("🔐  Authenticated — session saved.")
 })
 
 client.on("auth_failure", (msg) => {
@@ -68,22 +90,56 @@ client.on("auth_failure", (msg) => {
 
 client.on("ready", async () => {
   const info = client.info
-  console.log(`\n✅  Connected as ${info.pushname} (${info.wid.user})\n`)
+  const phone = `+${info.wid.user}`
+  const name = info.pushname
+
+  console.log(`\n✅  Connected as ${name} (${phone})\n`)
+
+  // Notify Parachute — Settings page will show "Connected"
+  await post("/api/integrations/whatsapp/status", {
+    status: "connected",
+    phone,
+    name,
+    syncDone: false,
+  })
+
+  // Start heartbeat
+  startHeartbeat(phone, name)
+
+  // Sync history
   await syncHistory()
+
+  await post("/api/integrations/whatsapp/status", {
+    status: "connected",
+    phone,
+    name,
+    syncDone: true,
+  })
+
   console.log("\n✅  History sync complete — listening for new messages…\n")
 })
 
-client.on("disconnected", (reason) => {
+client.on("disconnected", async (reason) => {
   console.error("❌  Disconnected:", reason)
+  await post("/api/integrations/whatsapp/status", { status: "disconnected" })
   console.log("    Restarting in 10 seconds…")
-  setTimeout(() => {
-    client.initialize()
-  }, 10_000)
+  setTimeout(() => client.initialize(), 10_000)
 })
+
+// ─── Heartbeat ────────────────────────────────────────────────────────────────
+
+function startHeartbeat(phone: string, name: string): void {
+  setInterval(async () => {
+    await post("/api/integrations/whatsapp/status", {
+      status: "connected",
+      phone,
+      name,
+    })
+  }, HEARTBEAT_INTERVAL_MS)
+}
 
 // ─── Real-time message capture ─────────────────────────────────────────────────
 
-// `message` = incoming; `message_create` = all (including sent by us)
 client.on("message_create", async (msg) => {
   await ingestMessage({
     waId: msg.id._serialized,
@@ -142,57 +198,41 @@ async function syncHistory(): Promise<void> {
 
       await sleep(CHAT_DELAY_MS)
     } catch (err) {
-      console.warn(`  ⚠️  Failed to fetch history for ${chat.name}:`, err)
+      console.warn(`  ⚠️  Failed to fetch ${chat.name}:`, err)
     }
   }
 
-  console.log(`  📊  Total messages posted to Parachute: ${totalSent}`)
+  console.log(`  📊  Total messages sent to Parachute: ${totalSent}`)
 }
 
-// ─── Ingest ───────────────────────────────────────────────────────────────────
+// ─── Ingest individual message ────────────────────────────────────────────────
 
 async function ingestMessage(msg: RawMessage): Promise<void> {
-  // Only 1:1 personal chats — skip groups, broadcasts, status
   const contactJid = msg.fromMe ? msg.to : msg.from
   if (!isPersonalChat(contactJid)) return
-  if (msg.type !== "chat") return // skip images, stickers, voice notes, etc.
+  if (msg.type !== "chat") return
   if (!msg.body?.trim()) return
 
-  try {
-    const res = await fetch(INGEST_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-daemon-secret": DAEMON_SECRET!,
-      },
-      body: JSON.stringify({
-        waId: msg.waId,
-        from: msg.from,
-        to: msg.to,
-        fromMe: msg.fromMe,
-        body: msg.body,
-        timestamp: msg.timestamp,
-      }),
-    })
-
-    if (!res.ok && res.status !== 200) {
-      console.warn(`  ⚠️  Ingest returned ${res.status} for message ${msg.waId}`)
-    }
-  } catch (err) {
-    console.error("  ❌  Failed to POST to Parachute:", err)
-  }
+  await post("/api/integrations/whatsapp/ingest", {
+    waId: msg.waId,
+    from: msg.from,
+    to: msg.to,
+    fromMe: msg.fromMe,
+    body: msg.body,
+    timestamp: msg.timestamp,
+  })
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise((r) => setTimeout(r, ms))
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 console.log("🚀  Parachute WhatsApp daemon starting…")
 console.log(`    Parachute: ${PARACHUTE_URL}`)
-console.log("")
+console.log("    Open Settings → WhatsApp to scan the QR code.\n")
 
 client.initialize()

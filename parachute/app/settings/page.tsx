@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { ConnectGmailButton, DisconnectButton, SyncGmailButton } from "@/components/auth/gmail-buttons"
+import { WhatsAppStatus } from "@/components/whatsapp/whatsapp-status"
 import { Mail, CheckCircle2, Info, MessageCircle, Terminal } from "lucide-react"
 
 export default async function SettingsPage() {
@@ -89,18 +90,10 @@ export default async function SettingsPage() {
         </div>
 
         <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
-          {/* How it works */}
-          <div className="px-5 py-4 space-y-2">
-            <p className="text-sm font-medium text-zinc-800">How it works</p>
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              Run a small background process on your own computer. It connects to WhatsApp Web
-              (scan a QR code once), syncs your last 90 days of 1:1 messages, then streams new
-              messages in real-time. Only the first 120 characters of each message are stored —
-              no full conversation history.
-            </p>
-          </div>
+          {/* Live status + QR — polls every 5s */}
+          <WhatsAppStatus />
 
-          {/* Setup steps */}
+          {/* Setup steps — always visible so user knows what to run */}
           <div className="px-5 py-5 space-y-4">
             <div className="flex items-center gap-2">
               <Terminal className="h-4 w-4 text-zinc-500 shrink-0" />
@@ -137,13 +130,14 @@ export default async function SettingsPage() {
               <li className="flex gap-3">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center text-[10px] font-semibold">3</span>
                 <div>
-                  <p className="font-medium text-zinc-700">Start and scan QR code</p>
+                  <p className="font-medium text-zinc-700">Start the daemon</p>
                   <code className="block mt-1 bg-zinc-100 rounded px-2 py-1 font-mono text-[11px]">
                     npm start
                   </code>
                   <p className="mt-1 text-zinc-500">
-                    A QR code will appear. Open WhatsApp → Settings → Linked Devices → Link a Device → scan it.
-                    On subsequent runs, no scan is needed — it auto-reconnects.
+                    A QR code will appear <strong>above</strong>. Open WhatsApp → Settings →
+                    Linked Devices → Link a Device → scan it. On subsequent runs no scan is
+                    needed — it auto-reconnects.
                   </p>
                 </div>
               </li>
