@@ -1,0 +1,153 @@
+// Parachute — Personal Relationship OS
+// To use PostgreSQL: change provider to "postgresql" and update DATABASE_URL in .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Person {
+  id                   String    @id @default(cuid())
+  fullName             String
+  company              String?
+  role                 String?
+  category             String    @default("other")
+  relationshipStrength Int       @default(3)
+  notes                String?
+  topics               String?
+  introducedBy         String?
+  location             String?
+  email                String?
+  phone                String?
+  linkedinUrl          String?
+  twitterUrl           String?
+  website              String?
+  preferredChannel     String?
+  status               String    @default("active")
+  lastInteractionAt    DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tags        PersonTag[]
+  identities  Identity[]
+  interactions Interaction[]
+  signals     Signal[]
+  valueEvents ValueEvent[]
+  suggestions Suggestion[]
+  notesList   Note[]
+
+  @@map("people")
+}
+
+model Tag {
+  id     String      @id @default(cuid())
+  name   String      @unique
+  people PersonTag[]
+
+  @@map("tags")
+}
+
+model PersonTag {
+  personId String
+  tagId    String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([personId, tagId])
+  @@map("person_tags")
+}
+
+model Identity {
+  id        String  @id @default(cuid())
+  personId  String
+  type      String
+  value     String
+  isPrimary Boolean @default(false)
+  person    Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("identities")
+}
+
+model Interaction {
+  id               String    @id @default(cuid())
+  personId         String
+  type             String
+  occurredAt       DateTime
+  summary          String?
+  direction        String    @default("mutual")
+  channel          String?
+  requiresFollowUp Boolean   @default(false)
+  followUpDueAt    DateTime?
+  metadata         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  person           Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("interactions")
+}
+
+model Signal {
+  id             String   @id @default(cuid())
+  personId       String
+  type           String
+  title          String
+  source         String?
+  sourceUrl      String?
+  occurredAt     DateTime
+  summary        String?
+  relevanceScore Int      @default(5)
+  unread         Boolean  @default(true)
+  needsAction    Boolean  @default(false)
+  metadata       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  person         Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("signals")
+}
+
+model ValueEvent {
+  id         String   @id @default(cuid())
+  personId   String
+  type       String
+  occurredAt DateTime
+  summary    String
+  outcome    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  person     Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("value_events")
+}
+
+model Suggestion {
+  id               String   @id @default(cuid())
+  personId         String
+  title            String
+  reason           String
+  priority         Int      @default(2)
+  suggestedAction  String?
+  suggestedChannel String?
+  status           String   @default("open")
+  generatedFrom    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  person           Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("suggestions")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  personId  String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
