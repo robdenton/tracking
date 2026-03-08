@@ -110,6 +110,7 @@ async function callGemini(contacts: ContactToScreen[]): Promise<ScreeningResult[
           },
         },
         temperature: 0.1, // low temperature for consistent classification
+        thinkingConfig: { thinkingBudget: 0 }, // disable thinking for speed (classification task)
       },
     }),
   })
