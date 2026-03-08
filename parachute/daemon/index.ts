@@ -141,6 +141,14 @@ function startHeartbeat(phone: string, name: string): void {
 // ─── Real-time message capture ─────────────────────────────────────────────────
 
 client.on("message_create", async (msg) => {
+  const contactJid = msg.fromMe ? msg.to : msg.from
+  let contactName: string | undefined
+  try {
+    const contact = await msg.getContact()
+    contactName = contact.pushname || contact.name || undefined
+  } catch {
+    // non-fatal — contact name is optional
+  }
   await ingestMessage({
     waId: msg.id._serialized,
     from: msg.from,
@@ -149,7 +157,9 @@ client.on("message_create", async (msg) => {
     body: msg.body,
     timestamp: msg.timestamp,
     type: msg.type,
+    contactName,
   })
+  void contactJid // used implicitly via ingestMessage
 })
 
 // ─── History sync ─────────────────────────────────────────────────────────────
@@ -162,6 +172,7 @@ interface RawMessage {
   body: string
   timestamp: number
   type: string
+  contactName?: string
 }
 
 async function syncHistory(): Promise<void> {
@@ -178,6 +189,15 @@ async function syncHistory(): Promise<void> {
       const messages = await chat.fetchMessages({ limit: HISTORY_LIMIT })
       const recent = messages.filter((m) => m.timestamp >= cutoff && m.type === "chat")
 
+      // Get the chat contact name once per chat (avoid per-message lookups)
+      let chatContactName: string | undefined
+      try {
+        const contact = await chat.getContact()
+        chatContactName = contact.pushname || contact.name || undefined
+      } catch {
+        chatContactName = chat.name || undefined
+      }
+
       for (const msg of recent) {
         await ingestMessage({
           waId: msg.id._serialized,
@@ -187,6 +207,7 @@ async function syncHistory(): Promise<void> {
           body: msg.body,
           timestamp: msg.timestamp,
           type: msg.type,
+          contactName: chatContactName,
         })
         totalSent++
       }
@@ -220,6 +241,7 @@ async function ingestMessage(msg: RawMessage): Promise<void> {
     fromMe: msg.fromMe,
     body: msg.body,
     timestamp: msg.timestamp,
+    ...(msg.contactName ? { contactName: msg.contactName } : {}),
   })
 }
 

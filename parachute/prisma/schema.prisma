@@ -153,6 +153,21 @@ model Note {
   @@map("notes")
 }
 
+// Staging buffer for contacts discovered from Gmail/WhatsApp not yet in Parachute
+model DiscoveredContact {
+  id           String   @id @default(cuid())
+  source       String   // "gmail" | "whatsapp"
+  name         String?
+  email        String?  // gmail discoveries
+  phone        String?  // whatsapp discoveries
+  messageCount Int      @default(1)
+  lastSeenAt   DateTime
+  dismissed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@map("discovered_contacts")
+}
+
 // Generic key/value store for integration state
 // e.g. whatsapp_status, whatsapp_qr, whatsapp_phone, whatsapp_last_seen
 model Setting {

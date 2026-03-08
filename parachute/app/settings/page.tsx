@@ -1,5 +1,5 @@
 import { auth } from "@/auth"
-import { ConnectGmailButton, DisconnectButton, SyncGmailButton } from "@/components/auth/gmail-buttons"
+import { ConnectGmailButton, DisconnectButton, SyncGmailButton, DiscoverGmailButton } from "@/components/auth/gmail-buttons"
 import { WhatsAppStatus } from "@/components/whatsapp/whatsapp-status"
 import { Mail, CheckCircle2, Info, MessageCircle, Terminal } from "lucide-react"
 
@@ -51,17 +51,31 @@ export default async function SettingsPage() {
           </div>
 
           {gmailConnected && (
-            <div className="px-5 py-5 space-y-3">
-              <div>
-                <p className="text-sm font-medium text-zinc-800">Sync emails</p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  Scans your last 90 days of Gmail for emails to/from any contact in Parachute.
-                  Matched emails are added as interactions and update each person&apos;s last-contact
-                  date. Only email subjects and metadata are read — no message bodies.
-                </p>
+            <>
+              <div className="px-5 py-5 space-y-3 border-b border-zinc-100">
+                <div>
+                  <p className="text-sm font-medium text-zinc-800">Sync emails</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Scans your last 90 days of Gmail for emails to/from any contact in Parachute.
+                    Matched emails are added as interactions and update each person&apos;s last-contact
+                    date. Only email subjects and metadata are read — no message bodies.
+                  </p>
+                </div>
+                <SyncGmailButton />
               </div>
-              <SyncGmailButton />
-            </div>
+
+              <div className="px-5 py-5 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-800">Discover contacts</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Scans your last 90 days of Gmail for people you&apos;ve emailed who aren&apos;t yet
+                    in Parachute. Review and add them from the{" "}
+                    <a href="/people/discover" className="underline">Discovered Contacts</a> page.
+                  </p>
+                </div>
+                <DiscoverGmailButton />
+              </div>
+            </>
           )}
 
           <div className="px-5 py-4 flex items-start gap-2 bg-zinc-50 rounded-b-xl">

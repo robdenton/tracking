@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { signIn, signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { Mail, RefreshCw, LogOut, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { Mail, RefreshCw, LogOut, Loader2, CheckCircle, AlertCircle, Sparkles } from "lucide-react"
 
 export function ConnectGmailButton() {
   const [loading, setLoading] = useState(false)
@@ -52,6 +52,14 @@ interface SyncResult {
   peopleChecked?: number
   totalCreated?: number
   syncedPeople?: Array<{ name: string; email: string; created: number }>
+  error?: string
+}
+
+interface DiscoverResult {
+  success?: boolean
+  discovered?: number
+  scanned?: number
+  total?: number
   error?: string
 }
 
@@ -125,6 +133,83 @@ export function SyncGmailButton() {
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
               {result.error}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function DiscoverGmailButton() {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<DiscoverResult | null>(null)
+
+  const handleDiscover = async () => {
+    setLoading(true)
+    setResult(null)
+
+    try {
+      const res = await fetch("/api/integrations/gmail/discover", { method: "POST" })
+      const data = await res.json()
+      setResult(data)
+    } catch {
+      setResult({ error: "Network error — please try again." })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Button onClick={handleDiscover} disabled={loading} variant="outline" className="gap-2">
+        {loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Scanning…
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" />
+            Discover contacts
+          </>
+        )}
+      </Button>
+
+      {result && (
+        <div
+          className={`rounded-lg border p-4 text-sm ${
+            result.error
+              ? "bg-red-50 border-red-200 text-red-800"
+              : "bg-green-50 border-green-200 text-green-800"
+          }`}
+        >
+          {result.error ? (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              {result.error}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-medium">
+                <CheckCircle className="h-4 w-4" />
+                Scan complete
+              </div>
+              <p className="text-green-700">
+                Scanned {result.scanned} emails · found{" "}
+                <strong>{result.total}</strong> unknown correspondents
+                {result.discovered != null && result.discovered > 0 && (
+                  <> ({result.discovered} new)</>
+                )}
+              </p>
+              {result.total != null && result.total > 0 && (
+                <a href="/people/discover" className="text-green-700 underline text-xs">
+                  Review discovered contacts →
+                </a>
+              )}
+              {result.total === 0 && (
+                <p className="text-green-600">No new contacts found.</p>
+              )}
             </div>
           )}
         </div>

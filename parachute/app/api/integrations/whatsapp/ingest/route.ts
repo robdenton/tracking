@@ -44,6 +44,7 @@ const IngestSchema = z.object({
   fromMe: z.boolean(),
   body: z.string().min(1),
   timestamp: z.number(),
+  contactName: z.string().optional(),
 })
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
   }
 
-  const { waId, from, to, fromMe, body, timestamp } = data
+  const { waId, from, to, fromMe, body, timestamp, contactName } = data
 
   // ── Determine contact JID ─────────────────────────────────────────────────
   // If fromMe=true, the contact is in `to`. Otherwise the contact is in `from`.
@@ -93,7 +94,34 @@ export async function POST(req: NextRequest) {
   })
 
   if (!person) {
-    // Unknown contact — not in Parachute, silently ignore
+    // Unknown contact — buffer in DiscoveredContact for user review
+    const occurredAt = new Date(timestamp * 1000)
+    const existingDiscovered = await prisma.discoveredContact.findFirst({
+      where: { source: "whatsapp", phone: contactPhone },
+    })
+    if (!existingDiscovered) {
+      await prisma.discoveredContact.create({
+        data: {
+          source: "whatsapp",
+          phone: contactPhone,
+          name: contactName ?? null,
+          messageCount: 1,
+          lastSeenAt: occurredAt,
+        },
+      })
+    } else if (!existingDiscovered.dismissed) {
+      await prisma.discoveredContact.update({
+        where: { id: existingDiscovered.id },
+        data: {
+          messageCount: { increment: 1 },
+          lastSeenAt:
+            occurredAt > existingDiscovered.lastSeenAt
+              ? occurredAt
+              : existingDiscovered.lastSeenAt,
+          name: existingDiscovered.name ?? contactName ?? null,
+        },
+      })
+    }
     return NextResponse.json({ skipped: "no matching person" })
   }
 

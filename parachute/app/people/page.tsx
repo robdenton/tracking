@@ -1,17 +1,21 @@
 import { getPeople } from "@/server/people"
+import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatRelative, categoryLabel, statusLabel } from "@/lib/utils"
-import { Plus, Star } from "lucide-react"
+import { Plus, Star, Sparkles } from "lucide-react"
 import { PeopleFilters } from "@/components/people/people-filters"
 
 interface SearchParams { search?: string; category?: string; status?: string }
 
 export default async function PeoplePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams
-  const people = await getPeople({ search: sp.search, category: sp.category, status: sp.status })
+  const [people, discoveredCount] = await Promise.all([
+    getPeople({ search: sp.search, category: sp.category, status: sp.status }),
+    prisma.discoveredContact.count({ where: { dismissed: false } }),
+  ])
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
@@ -24,6 +28,19 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
           <Button size="sm"><Plus className="h-4 w-4 mr-1" />Add person</Button>
         </Link>
       </div>
+
+      {discoveredCount > 0 && (
+        <Link
+          href="/people/discover"
+          className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+        >
+          <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+          <span>
+            <strong>{discoveredCount}</strong> contact{discoveredCount !== 1 ? "s" : ""} discovered from Gmail &amp; WhatsApp
+          </span>
+          <span className="ml-auto text-xs font-medium text-amber-700">Review →</span>
+        </Link>
+      )}
 
       <PeopleFilters />
 
