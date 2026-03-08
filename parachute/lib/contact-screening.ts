@@ -1,5 +1,5 @@
 /**
- * Contact screening using Google Gemini 2.0 Flash.
+ * Contact screening using Google Gemini 2.5 Flash.
  *
  * Classifies each discovered contact as:
  *   "keep"      — real person worth staying in touch with
@@ -11,7 +11,7 @@
  */
 
 const GEMINI_ENDPOINT =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 const BATCH_SIZE = 50
 
