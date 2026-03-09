@@ -62,6 +62,10 @@ async function post(path: string, body: object): Promise<Record<string, unknown>
 
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "parachute" }),
+  // Use the actual Chrome version — the whatsapp-web.js default (Chrome 101) is
+  // too old for modern WhatsApp Web and causes the chat Store to not populate.
+  userAgent:
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.31 Safari/537.36",
   puppeteer: {
     headless: true,
     args: [
@@ -108,6 +112,13 @@ client.on("ready", async () => {
   // Start heartbeat
   startHeartbeat(phone, name)
 
+  // Sync contacts for discovery (runs on a fresh frame, before syncHistory can detach it)
+  try {
+    await syncContacts()
+  } catch (err) {
+    console.error("❌  Initial syncContacts failed:", err)
+  }
+
   // Sync history
   await syncHistory()
 
@@ -139,7 +150,11 @@ function startHeartbeat(phone: string, name: string): void {
     })
     if (res.discoverContacts) {
       console.log("🔍  Contact discovery requested from Settings…")
-      await syncContacts()
+      try {
+        await syncContacts()
+      } catch (err) {
+        console.error("❌  syncContacts failed:", err)
+      }
     }
   }, HEARTBEAT_INTERVAL_MS)
 }
